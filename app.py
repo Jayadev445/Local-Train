@@ -30,6 +30,10 @@ def register():
         email = request.form['email']
         password = request.form['password']
 
+        if username.lower() == ADMIN_USERNAME.lower():
+            flash('Cannot register with the username admin!', 'error')
+            return redirect('/register')
+
         account = db.users.find_one({"username": username})
         if account:
             flash('Username already exists!', 'error')
