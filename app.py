@@ -1,19 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
-from flask_mysqldb import MySQL
-import MySQLdb.cursors
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 import os
 from io import BytesIO
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# MySQL configuration
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'root'  # Set your MySQL password
-app.config['MYSQL_DB'] = 'train_management'
-
-mysql = MySQL(app)
+# MongoDB configuration
+client = MongoClient("mongodb+srv://iamjayadev445_db_user:7kVXmKX5DgokyaH9@cluster0.hq9ktec.mongodb.net/?appName=Cluster0")
+db = client['train_management']
 
 # Admin default credentials
 ADMIN_USERNAME = 'admin'
@@ -34,16 +30,12 @@ def register():
         email = request.form['email']
         password = request.form['password']
 
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
-        account = cursor.fetchone()
+        account = db.users.find_one({"username": username})
         if account:
             flash('Username already exists!', 'error')
             return redirect('/register')
 
-        cursor.execute("INSERT INTO users (username, email, password) VALUES (%s,%s,%s)",
-                       (username, email, password))
-        mysql.connection.commit()
+        db.users.insert_one({"username": username, "email": email, "password": password})
         flash('Registration successful! Please login.', 'success')
         return redirect('/login')
 
@@ -62,9 +54,7 @@ def login():
             session['role'] = 'admin'
             return redirect('/admin')
 
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (username, password))
-        account = cursor.fetchone()
+        account = db.users.find_one({"username": username, "password": password})
         if account:
             session['username'] = account['username']
             session['role'] = 'user'
@@ -89,9 +79,7 @@ def logout():
 @app.route('/admin')
 def admin():
     if 'role' in session and session['role'] == 'admin':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM trains")
-        trains = cursor.fetchall()
+        trains = list(db.trains.find())
         return render_template('admin.html', trains=trains)
     else:
         flash('Access denied', 'error')
@@ -108,15 +96,19 @@ def add_train():
             destination_station = request.form['destination_station']
             departure_time = request.form['departure_time']
             arrival_time = request.form['arrival_time']
-            total_seats = request.form['total_seats']
+            total_seats = int(request.form['total_seats'])
             status = request.form['status']
 
-            cursor = mysql.connection.cursor()
-            cursor.execute("""
-                INSERT INTO trains (train_name, source_station, destination_station, departure_time, arrival_time, total_seats, available_seats, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (train_name, source_station, destination_station, departure_time, arrival_time, total_seats, total_seats, status))
-            mysql.connection.commit()
+            db.trains.insert_one({
+                "train_name": train_name,
+                "source_station": source_station,
+                "destination_station": destination_station,
+                "departure_time": departure_time,
+                "arrival_time": arrival_time,
+                "total_seats": total_seats,
+                "available_seats": total_seats,
+                "status": status
+            })
             flash('Train added successfully', 'success')
             return redirect('/admin')
 
@@ -130,9 +122,7 @@ def add_train():
 @app.route('/user')
 def user():
     if 'role' in session and session['role'] == 'user':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM trains WHERE available_seats > 0")
-        trains = cursor.fetchall()
+        trains = list(db.trains.find({"available_seats": {"$gt": 0}}))
         return render_template('user.html', trains=trains)
     else:
         flash('Access denied', 'error')
@@ -140,37 +130,42 @@ def user():
 
 
 # --------------------- BOOK TICKET --------------------- #
-@app.route('/book_ticket/<int:train_id>', methods=['GET', 'POST'])
+@app.route('/book_ticket/<string:train_id>', methods=['GET', 'POST'])
 def book_ticket(train_id):
     if 'role' in session and session['role'] == 'user':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM trains WHERE id=%s", (train_id,))
-        train = cursor.fetchone()
+        train = db.trains.find_one({"_id": ObjectId(train_id)})
 
-        if train[8] == 'Cancelled':
+        if not train:
+            flash('Train not found', 'error')
+            return redirect('/user')
+
+        if train.get('status') == 'Cancelled':
             flash('Booking not allowed for cancelled trains', 'error')
             return redirect('/user')
 
         if request.method == 'POST':
             seats = int(request.form['seats'])
-            if seats > train[7]:  # available_seats
+            if seats > train.get('available_seats', 0):
                 flash('Not enough seats available', 'error')
                 return redirect(f'/book_ticket/{train_id}')
 
             total_amount = seats * TICKET_PRICE
-            cursor.execute("""
-                INSERT INTO bookings (username, train_id, seats_booked, total_amount, status)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (session['username'], train_id, seats, total_amount, 'Booked'))
+            
+            result = db.bookings.insert_one({
+                "username": session['username'],
+                "train_id": train_id,
+                "seats_booked": seats,
+                "total_amount": total_amount,
+                "status": "Booked"
+            })
+            booking_id = str(result.inserted_id)
 
             # Update available seats
-            cursor.execute("UPDATE trains SET available_seats = available_seats - %s WHERE id=%s", (seats, train_id))
-            mysql.connection.commit()
+            db.trains.update_one(
+                {"_id": ObjectId(train_id)},
+                {"$inc": {"available_seats": -seats}}
+            )
             flash('Booking successful! Proceed to payment.', 'success')
-
-            # Get the booking id
-            cursor.execute("SELECT LAST_INSERT_ID()")
-            booking_id = cursor.fetchone()[0]
             return redirect(f'/payment/{booking_id}')
 
         return render_template('book_ticket.html', train=train)
@@ -180,20 +175,17 @@ def book_ticket(train_id):
 
 
 # --------------------- PAYMENT --------------------- #
-@app.route('/payment/<int:booking_id>', methods=['GET', 'POST'])
+@app.route('/payment/<string:booking_id>', methods=['GET', 'POST'])
 def payment(booking_id):
     if 'role' in session and session['role'] == 'user':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM bookings WHERE id=%s AND username=%s", (booking_id, session['username']))
-        booking = cursor.fetchone()
+        booking = db.bookings.find_one({"_id": ObjectId(booking_id), "username": session['username']})
 
         if not booking:
             flash('Booking not found', 'error')
             return redirect('/user')
 
         if request.method == 'POST':
-            cursor.execute("UPDATE bookings SET status='Paid' WHERE id=%s", (booking_id,))
-            mysql.connection.commit()
+            db.bookings.update_one({"_id": ObjectId(booking_id)}, {"$set": {"status": "Paid"}})
             flash('Payment successful!', 'success')
             return redirect(f'/ticket/{booking_id}')
 
@@ -204,18 +196,15 @@ def payment(booking_id):
 
 
 # --------------------- TICKET --------------------- #
-@app.route('/ticket/<int:booking_id>')
+@app.route('/ticket/<string:booking_id>')
 def ticket(booking_id):
     if 'role' in session and session['role'] == 'user':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM bookings WHERE id=%s AND username=%s", (booking_id, session['username']))
-        booking = cursor.fetchone()
+        booking = db.bookings.find_one({"_id": ObjectId(booking_id), "username": session['username']})
         if not booking:
             flash('Booking not found', 'error')
             return redirect('/user')
 
-        cursor.execute("SELECT * FROM trains WHERE id=%s", (booking[2],))  # train_id
-        train = cursor.fetchone()
+        train = db.trains.find_one({"_id": ObjectId(booking['train_id'])})
 
         return render_template('ticket.html', booking=booking, train=train)
     else:
@@ -224,36 +213,33 @@ def ticket(booking_id):
 
 
 # --------------------- DOWNLOAD TICKET --------------------- #
-@app.route('/download_ticket/<int:booking_id>')
+@app.route('/download_ticket/<string:booking_id>')
 def download_ticket(booking_id):
     if 'role' in session and session['role'] == 'user':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM bookings WHERE id=%s AND username=%s", (booking_id, session['username']))
-        booking = cursor.fetchone()
+        booking = db.bookings.find_one({"_id": ObjectId(booking_id), "username": session['username']})
         if not booking:
             flash('Booking not found', 'error')
             return redirect('/user')
 
-        cursor.execute("SELECT * FROM trains WHERE id=%s", (booking[2],))
-        train = cursor.fetchone()
+        train = db.trains.find_one({"_id": ObjectId(booking['train_id'])})
 
         ticket_text = f"""
         -------- Train Ticket --------
-        Booking ID: {booking[0]}
-        Username: {booking[1]}
-        Train Name: {train[1]}
-        Source: {train[2]}
-        Destination: {train[3]}
-        Departure: {train[4]}
-        Arrival: {train[5]}
-        Seats Booked: {booking[3]}
-        Total Amount: ₹{booking[4]}
-        Status: {booking[5]}
+        Booking ID: {str(booking['_id'])}
+        Username: {booking.get('username', '')}
+        Train Name: {train.get('train_name', '')}
+        Source: {train.get('source_station', '')}
+        Destination: {train.get('destination_station', '')}
+        Departure: {train.get('departure_time', '')}
+        Arrival: {train.get('arrival_time', '')}
+        Seats Booked: {booking.get('seats_booked', '')}
+        Total Amount: ₹{booking.get('total_amount', '')}
+        Status: {booking.get('status', '')}
         ------------------------------
         """
 
         # Send as a text file
-        return send_file(BytesIO(ticket_text.encode()), as_attachment=True, download_name=f'ticket_{booking[0]}.txt', mimetype='text/plain')
+        return send_file(BytesIO(ticket_text.encode()), as_attachment=True, download_name=f"ticket_{str(booking['_id'])}.txt", mimetype='text/plain')
     else:
         flash('Access denied', 'error')
         return redirect('/login')
@@ -263,9 +249,7 @@ def download_ticket(booking_id):
 @app.route('/view_bookings')
 def view_bookings():
     if 'role' in session and session['role'] == 'admin':
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM bookings")
-        bookings = cursor.fetchall()
+        bookings = list(db.bookings.find())
         return render_template('view_bookings.html', bookings=bookings)
     else:
         flash('Access denied', 'error')
@@ -274,4 +258,4 @@ def view_bookings():
 
 # --------------------- RUN APP --------------------- #
 if __name__ == '__main__':
-    app.run(host="0.0.0.0,port=5000")
+    app.run(host="0.0.0.0", port=5000)

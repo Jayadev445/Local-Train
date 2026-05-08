@@ -138,16 +138,16 @@
         {% endif %}
         {% endwith %}
 
-        <p><strong>Train Name:</strong> {{ train[1] }}</p>
-        <p><strong>Source:</strong> {{ train[2] }}</p>
-        <p><strong>Destination:</strong> {{ train[3] }}</p>
-        <p><strong>Departure:</strong> {{ train[4] }}</p>
-        <p><strong>Arrival:</strong> {{ train[5] }}</p>
-        <p><strong>Available Seats:</strong> {{ train[7] }}</p>
+        <p><strong>Train Name:</strong> {{ train.train_name }}</p>
+        <p><strong>Source:</strong> {{ train.source_station }}</p>
+        <p><strong>Destination:</strong> {{ train.destination_station }}</p>
+        <p><strong>Departure:</strong> {{ train.departure_time }}</p>
+        <p><strong>Arrival:</strong> {{ train.arrival_time }}</p>
+        <p><strong>Available Seats:</strong> {{ train.available_seats }}</p>
 
         <form method="POST">
             <label for="seats">Number of Seats to Book:</label>
-            <input type="number" name="seats" id="seats" min="1" max="{{ train[7] }}" required>
+            <input type="number" name="seats" id="seats" min="1" max="{{ train.available_seats }}" required>
 
             <input type="submit" value="Book Now">
         </form>

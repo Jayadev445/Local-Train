@@ -147,14 +147,14 @@
             <tbody>
                 {% for train in trains %}
                 <tr>
-                    <td>{{ train[0] }}</td>
-                    <td>{{ train[1] }}</td>
-                    <td>{{ train[2] }}</td>
-                    <td>{{ train[3] }}</td>
-                    <td>{{ train[4] }}</td>
-                    <td>{{ train[5] }}</td>
-                    <td>{{ train[7] }}</td>
-                    <td><a class="book-btn" href="/book_ticket/{{ train[0] }}">Book Ticket</a></td>
+                    <td>{{ train._id }}</td>
+                    <td>{{ train.train_name }}</td>
+                    <td>{{ train.source_station }}</td>
+                    <td>{{ train.destination_station }}</td>
+                    <td>{{ train.departure_time }}</td>
+                    <td>{{ train.arrival_time }}</td>
+                    <td>{{ train.available_seats }}</td>
+                    <td><a class="book-btn" href="/book_ticket/{{ train._id }}">Book Ticket</a></td>
                 </tr>
                 {% else %}
                 <tr>

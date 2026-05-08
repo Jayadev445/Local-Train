@@ -116,10 +116,10 @@
         {% endif %}
         {% endwith %}
 
-        <p><strong>Booking ID:</strong> {{ booking[0] }}</p>
-        <p><strong>Seats Booked:</strong> {{ booking[3] }}</p>
-        <p><strong>Total Amount:</strong> ₹{{ booking[4] }}</p>
-        <p><strong>Status:</strong> {{ booking[5] }}</p>
+        <p><strong>Booking ID:</strong> {{ booking._id }}</p>
+        <p><strong>Seats Booked:</strong> {{ booking.seats_booked }}</p>
+        <p><strong>Total Amount:</strong> ₹{{ booking.total_amount }}</p>
+        <p><strong>Status:</strong> {{ booking.status }}</p>
 
         <form method="POST">
             <input type="submit" value="Pay Now">

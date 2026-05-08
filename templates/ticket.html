@@ -120,17 +120,17 @@
     <div class="ticket-container">
         <h2>Your Ticket</h2>
 
-        <p><strong>Booking ID:</strong> {{ booking[0] }}</p>
-        <p><strong>Train Name:</strong> {{ train[1] }}</p>
-        <p><strong>Source:</strong> {{ train[2] }}</p>
-        <p><strong>Destination:</strong> {{ train[3] }}</p>
-        <p><strong>Departure:</strong> {{ train[4] }}</p>
-        <p><strong>Arrival:</strong> {{ train[5] }}</p>
-        <p><strong>Seats Booked:</strong> {{ booking[3] }}</p>
-        <p><strong>Total Amount:</strong> ₹{{ booking[4] }}</p>
-        <p><strong>Status:</strong> {{ booking[5] }}</p>
+        <p><strong>Booking ID:</strong> {{ booking._id }}</p>
+        <p><strong>Train Name:</strong> {{ train.train_name }}</p>
+        <p><strong>Source:</strong> {{ train.source_station }}</p>
+        <p><strong>Destination:</strong> {{ train.destination_station }}</p>
+        <p><strong>Departure:</strong> {{ train.departure_time }}</p>
+        <p><strong>Arrival:</strong> {{ train.arrival_time }}</p>
+        <p><strong>Seats Booked:</strong> {{ booking.seats_booked }}</p>
+        <p><strong>Total Amount:</strong> ₹{{ booking.total_amount }}</p>
+        <p><strong>Status:</strong> {{ booking.status }}</p>
 
-        <a class="download-btn" href="/download_ticket/{{ booking[0] }}">Download Ticket</a>
+        <a class="download-btn" href="/download_ticket/{{ booking._id }}">Download Ticket</a>
 
         <div class="links">
             <a href="/user">Back to Dashboard</a>
